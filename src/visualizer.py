@@ -5,25 +5,35 @@ from plotly.subplots import make_subplots
 
 def build_sankey_diagram(classified_threads_df: pd.DataFrame, output_path: str = "./output/sankey_root_cause.html") -> str:
     """
-    Generate an interactive Plotly Sankey diagram mapping Category -> Root Cause -> Outcome.
+    Generate an interactive 4-Level Plotly Sankey diagram mapping:
+    Direction (Internal/External) -> Category -> Root Cause -> Outcome
     Exports a standalone HTML file.
     """
     if classified_threads_df.empty:
         print("[Visualizer] Warning: Empty DataFrame provided. Sankey diagram generation skipped.")
         return ""
 
-    # Aggregate flow counts
-    # Flow 1: Category -> Root Cause
-    flow_cat_root = classified_threads_df.groupby(['category', 'root_cause'], as_index=False).agg(
+    df = classified_threads_df.copy()
+    if 'direction' not in df.columns:
+        df['direction'] = 'External Initiated (We are Receiver)'
+
+    # Aggregate flows across 3 transitions (4 levels)
+    # Flow 1: Direction -> Category
+    flow1 = df.groupby(['direction', 'category'], as_index=False).agg(
+        value=('thread_id', 'count')
+    ).rename(columns={'direction': 'source', 'category': 'target'})
+
+    # Flow 2: Category -> Root Cause
+    flow2 = df.groupby(['category', 'root_cause'], as_index=False).agg(
         value=('thread_id', 'count')
     ).rename(columns={'category': 'source', 'root_cause': 'target'})
 
-    # Flow 2: Root Cause -> Outcome
-    flow_root_outcome = classified_threads_df.groupby(['root_cause', 'outcome'], as_index=False).agg(
+    # Flow 3: Root Cause -> Outcome
+    flow3 = df.groupby(['root_cause', 'outcome'], as_index=False).agg(
         value=('thread_id', 'count')
     ).rename(columns={'root_cause': 'source', 'outcome': 'target'})
 
-    flows = pd.concat([flow_cat_root, flow_root_outcome], ignore_index=True)
+    flows = pd.concat([flow1, flow2, flow3], ignore_index=True)
 
     # Unique list of nodes
     all_nodes = list(pd.unique(flows[['source', 'target']].values.ravel('K')))
@@ -36,13 +46,14 @@ def build_sankey_diagram(classified_threads_df: pd.DataFrame, output_path: str =
     # Color palette
     colors = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173"
     ]
     node_colors = [colors[i % len(colors)] for i in range(len(all_nodes))]
 
     fig = go.Figure(data=[go.Sankey(
         node=dict(
-            pad=20,
+            pad=18,
             thickness=20,
             line=dict(color="black", width=0.5),
             label=all_nodes,
@@ -52,27 +63,27 @@ def build_sankey_diagram(classified_threads_df: pd.DataFrame, output_path: str =
             source=sources,
             target=targets,
             value=values,
-            color="rgba(180, 180, 180, 0.4)"
+            color="rgba(180, 180, 180, 0.35)"
         )
     )])
 
     fig.update_layout(
-        title_text="<b>Credit Management Thread Flow: Category ➔ Root Cause ➔ Outcome</b>",
-        font_size=13,
+        title_text="<b>Advanced 4-Level Credit Management Flow: Direction ➔ Category ➔ Root Cause ➔ Outcome</b>",
+        font_size=12,
         font_family="Arial, sans-serif",
-        height=700,
+        height=750,
         margin=dict(l=20, r=20, t=60, b=20)
     )
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     fig.write_html(output_path)
-    print(f"[Visualizer] Sankey diagram exported successfully to: {output_path}")
+    print(f"[Visualizer] 4-Level Sankey diagram exported successfully to: {output_path}")
     return output_path
 
 def build_cumulative_volume_chart(classified_threads_df: pd.DataFrame, output_path: str = "./output/cumulative_volume_over_time.html") -> str:
     """
     Generate an interactive Plotly chart showing monthly new and cumulative thread volume over time
-    broken down by Credit Category and Root Causes.
+    broken down by Credit Category and Thread Direction.
     """
     if classified_threads_df.empty:
         return ""
@@ -93,8 +104,8 @@ def build_cumulative_volume_chart(classified_threads_df: pd.DataFrame, output_pa
         shared_xaxes=True,
         vertical_spacing=0.12,
         subplot_titles=(
-            "<b>Cumulative Thread Volume by Issue Category (Last 2 Years)</b>",
-            "<b>Monthly New Thread Inflow by Category</b>"
+            "<b>Cumulative Thread Volume Trajectory by Category (Last 2 Years)</b>",
+            "<b>Monthly New Thread Inflow Stacked by Category</b>"
         )
     )
 

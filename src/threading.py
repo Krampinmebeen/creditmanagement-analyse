@@ -6,7 +6,7 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
     """
     Reconstruct email threads using DuckDB SQL analytics.
     Groups messages by parent-child references or cleaned subject line,
-    and computes duration, message counts, and response statistics per thread.
+    computes initial sender/direction, duration, message counts, and response statistics per thread.
     """
     if emails_df.empty:
         return pd.DataFrame()
@@ -65,6 +65,7 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
             ROUND(EPOCH(MAX(date) - MIN(date)) / 86400.0, 2) AS duration_days,
             STRING_AGG(body, ' | ') AS concatenated_body,
             FIRST(subject_clean) AS subject_clean,
+            ARG_MIN(sender, date) AS initial_sender,
             FIRST(true_category) AS true_category,
             FIRST(true_root_cause) AS true_root_cause,
             FIRST(true_outcome) AS true_outcome
@@ -87,6 +88,15 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
     SELECT
         t.thread_id,
         t.subject_clean,
+        t.initial_sender,
+        CASE 
+            WHEN LOWER(t.initial_sender) LIKE '%kramp%' 
+              OR LOWER(t.initial_sender) LIKE '%credit%' 
+              OR LOWER(t.initial_sender) LIKE '%sales.nl%'
+              OR LOWER(t.initial_sender) LIKE '%billing%'
+              OR LOWER(t.initial_sender) LIKE '%administratie%' THEN 'Internal Initiated (We are Sender)'
+            ELSE 'External Initiated (We are Receiver)'
+        END AS direction,
         t.email_count,
         t.first_email_date,
         t.last_email_date,

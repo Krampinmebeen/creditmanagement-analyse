@@ -19,7 +19,7 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
     print("=" * 70)
-    print(" CREDIT MANAGEMENT PST EMAIL ANALYSIS PIPELINE")
+    print(" CREDIT MANAGEMENT PST EMAIL ANALYSIS PIPELINE (ADVANCED 4-LEVEL)")
     print(f" Timeframe Window: Last {args.years} Years")
     print("=" * 70)
 
@@ -50,7 +50,7 @@ def main():
 
     # Save summary metrics
     csv_metrics_path = os.path.join(args.output_dir, "credit_thread_metrics.csv")
-    export_cols = ['thread_id', 'category', 'root_cause', 'outcome', 'email_count', 'duration_days', 'avg_response_hours', 'subject_clean', 'first_email_date', 'last_email_date']
+    export_cols = ['thread_id', 'direction', 'category', 'root_cause', 'outcome', 'email_count', 'duration_days', 'avg_response_hours', 'initial_sender', 'subject_clean', 'first_email_date', 'last_email_date']
     classified_df[export_cols].to_csv(csv_metrics_path, index=False)
     print(f"[Pipeline] Exported thread metrics CSV to: {csv_metrics_path}")
 
@@ -72,24 +72,37 @@ def main():
 
     # Summary Statistics to Console
     print("\n" + "=" * 70)
-    print(" ANALYSIS SUMMARY RESULTS (HIERARCHICAL ROOT CAUSE MAPPING)")
+    print(" ANALYSIS SUMMARY RESULTS (4-LEVEL HIERARCHY & RESOLUTION DYNAMICS)")
     print("=" * 70)
-    print(f" Total Filtered Emails:      {len(emails_df):,}")
-    print(f" Total Unique Threads:        {len(classified_df):,}")
-    print(f" Avg Emails / Thread:         {classified_df['email_count'].mean():.2f}")
-    print(f" Avg Thread Duration (Days):  {classified_df['duration_days'].mean():.2f} days")
-    print(f" Avg Response Lag (Hours):    {classified_df['avg_response_hours'].mean():.2f} hours")
-    print("\n Breakdown by Credit Category:")
-    cat_summary = classified_df.groupby('category').agg(
-        thread_count=('thread_id', 'count'),
-        avg_emails=('email_count', 'mean'),
-        avg_days=('duration_days', 'mean')
-    ).reset_index()
-    print(cat_summary.to_string(index=False))
+    print(f" Total Filtered Emails:              {len(emails_df):,}")
+    print(f" Total Unique Threads:                {len(classified_df):,}")
+    print(f" One-Touch Threads (1 Message):      {(classified_df['email_count']==1).sum():,} ({(classified_df['email_count']==1).mean()*100:.1f}%)")
+    print(f" Active Multi-Email Threads (>1 Msg):{(classified_df['email_count']>1).sum():,} ({(classified_df['email_count']>1).mean()*100:.1f}%)")
+    print(f" Overall Duration Median:            {classified_df['duration_days'].median():.2f} days | Mean: {classified_df['duration_days'].mean():.2f} days")
+    
+    multi_df = classified_df[classified_df['email_count'] > 1]
+    if not multi_df.empty:
+        print(f" Multi-Email Thread Duration Median: {multi_df['duration_days'].median():.2f} days | Mean: {multi_df['duration_days'].mean():.2f} days")
+        print(f" Multi-Email Response Lag Median:    {multi_df['avg_response_hours'].median():.2f} hours")
 
-    print("\n Top Root Causes Detected:")
-    rc_summary = classified_df.groupby(['category', 'root_cause']).size().reset_index(name='threads').sort_values('threads', ascending=False)
-    print(rc_summary.head(10).to_string(index=False))
+    print("\n Breakdown by Thread Direction:")
+    print(classified_df['direction'].value_counts().to_string())
+
+    print("\n Breakdown by Credit Category (Active Multi-Email Threads Median Duration):")
+    cat_records = []
+    for cat, grp in classified_df.groupby('category'):
+        m_grp = grp[grp['email_count'] > 1]
+        cat_records.append({
+            'Category': cat,
+            'Total Threads': len(grp),
+            'One-Touch (0d)': (grp['email_count'] == 1).sum(),
+            'Multi-Touch': len(m_grp),
+            'Overall Median (d)': round(grp['duration_days'].median(), 2),
+            'Multi-Email Median (d)': round(m_grp['duration_days'].median(), 2) if not m_grp.empty else 0.0,
+            'Mean Days': round(grp['duration_days'].mean(), 2)
+        })
+    cat_summary = pd.DataFrame(cat_records)
+    print(cat_summary.to_string(index=False))
 
     print("\n Artifacts generated:")
     print(f"  1. Parquet Emails:       {parquet_path}")
