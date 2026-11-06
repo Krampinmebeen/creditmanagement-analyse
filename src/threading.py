@@ -11,6 +11,11 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
     if emails_df.empty:
         return pd.DataFrame()
 
+    # Ensure optional synthetic columns exist if missing
+    for col in ['true_category', 'true_root_cause', 'true_outcome']:
+        if col not in emails_df.columns:
+            emails_df[col] = None
+
     con = duckdb.connect(database=':memory:')
     con.register('raw_emails', emails_df)
 
@@ -32,15 +37,9 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                 )
             ) AS root_message_id,
-            COALESCE(
-                true_category, NULL
-            ) as true_category,
-            COALESCE(
-                true_root_cause, NULL
-            ) as true_root_cause,
-            COALESCE(
-                true_outcome, NULL
-            ) as true_outcome
+            true_category,
+            true_root_cause,
+            true_outcome
         FROM raw_emails
     ),
     threads_assigned AS (
@@ -105,5 +104,5 @@ def reconstruct_threads_and_compute_metrics(emails_df: pd.DataFrame) -> pd.DataF
     metrics_df = con.execute(query_metrics).df()
     con.close()
 
-    print(f"[Threading] Successfully aggregated {len(metrics_df)} unique email threads.")
+    print(f"[Threading] Successfully aggregated {len(metrics_df):,} unique email threads.")
     return metrics_df
