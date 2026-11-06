@@ -1,0 +1,5 @@
+duckdb>=0.9.0
+pandas>=2.0.0
+plotly>=5.15.0
+pyarrow>=12.0.0
+extract_msg>=0.40.0

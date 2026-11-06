@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Data and Outputs (Never commit large files or sensitive outputs)
+*.pst
+*.msg
+*.eml
+*.parquet
+*.csv
+*.html
+output/
+test_output/
+data/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
