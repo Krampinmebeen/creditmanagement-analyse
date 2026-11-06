@@ -6,7 +6,7 @@ import pandas as pd
 from src.extractor import parse_pst_file, generate_sample_credit_data
 from src.threading import reconstruct_threads_and_compute_metrics
 from src.classifier import classify_threads
-from src.visualizer import build_sankey_diagram
+from src.visualizer import build_sankey_diagram, build_cumulative_volume_chart
 
 def main():
     parser = argparse.ArgumentParser(description="Credit Management PST Email Analysis Pipeline")
@@ -44,7 +44,7 @@ def main():
     print("\n[Pipeline] Step 2: Reconstructing email conversation threads in DuckDB...")
     threads_df = reconstruct_threads_and_compute_metrics(emails_df)
 
-    # Step 3: Taxonomy Classification
+    # Step 3: Taxonomy Classification (Hierarchical Root Cause Priority)
     print("\n[Pipeline] Step 3: Classifying credit management categories and root causes...")
     classified_df = classify_threads(threads_df)
 
@@ -54,14 +54,25 @@ def main():
     classified_df[export_cols].to_csv(csv_metrics_path, index=False)
     print(f"[Pipeline] Exported thread metrics CSV to: {csv_metrics_path}")
 
-    # Step 4: Sankey Diagram Generation
-    print("\n[Pipeline] Step 4: Generating interactive Sankey diagram...")
+    # Step 4: Visualizations
+    print("\n[Pipeline] Step 4: Generating interactive visual dashboards...")
     html_sankey_path = os.path.join(args.output_dir, "sankey_root_cause.html")
     build_sankey_diagram(classified_df, output_path=html_sankey_path)
 
+    html_cumulative_path = os.path.join(args.output_dir, "cumulative_volume_over_time.html")
+    build_cumulative_volume_chart(classified_df, output_path=html_cumulative_path)
+
+    # Monthly Cumulative CSV
+    classified_df['month'] = pd.to_datetime(classified_df['first_email_date'], utc=True).dt.strftime('%Y-%m')
+    monthly_summary = classified_df.groupby(['month', 'category']).size().unstack(fill_value=0)
+    cumulative_summary = monthly_summary.cumsum()
+    cumulative_csv_path = os.path.join(args.output_dir, "monthly_cumulative_volume.csv")
+    cumulative_summary.to_csv(cumulative_csv_path)
+    print(f"[Pipeline] Exported monthly cumulative volume table to: {cumulative_csv_path}")
+
     # Summary Statistics to Console
     print("\n" + "=" * 70)
-    print(" ANALYSIS SUMMARY RESULTS")
+    print(" ANALYSIS SUMMARY RESULTS (HIERARCHICAL ROOT CAUSE MAPPING)")
     print("=" * 70)
     print(f" Total Filtered Emails:      {len(emails_df):,}")
     print(f" Total Unique Threads:        {len(classified_df):,}")
@@ -76,10 +87,16 @@ def main():
     ).reset_index()
     print(cat_summary.to_string(index=False))
 
+    print("\n Top Root Causes Detected:")
+    rc_summary = classified_df.groupby(['category', 'root_cause']).size().reset_index(name='threads').sort_values('threads', ascending=False)
+    print(rc_summary.head(10).to_string(index=False))
+
     print("\n Artifacts generated:")
-    print(f"  1. Parquet Emails: {parquet_path}")
-    print(f"  2. Metrics CSV:    {csv_metrics_path}")
-    print(f"  3. Sankey HTML:    {html_sankey_path}")
+    print(f"  1. Parquet Emails:       {parquet_path}")
+    print(f"  2. Metrics CSV:          {csv_metrics_path}")
+    print(f"  3. Cumulative CSV:       {cumulative_csv_path}")
+    print(f"  4. Sankey HTML:          {html_sankey_path}")
+    print(f"  5. Cumulative Chart HTML:{html_cumulative_path}")
     print("=" * 70)
 
 if __name__ == "__main__":
